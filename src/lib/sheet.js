@@ -32,8 +32,8 @@ export async function fetchSheet() {
 
 /**
  * Baca spreadsheet SO (Stok Opname).
- * Kolom dideteksi dari baris header: "produk/nama", "grocery", "gudang", "on system/sistem".
- * Baris dengan produk kosong di-skip. Mengembalikan array { produk, grocery, gudang, system }.
+ * Kolom dideteksi dari baris header: "produk/nama", "grocery", "gudang", "on system/sistem", "expired".
+ * Baris dengan produk kosong di-skip. Mengembalikan array { produk, grocery, gudang, system, expired }.
  */
 export async function fetchSoSheet() {
   if (!SO_SHEET_URL) return [];
@@ -48,6 +48,7 @@ export async function fetchSoSheet() {
   const iGrocery = idx(["grocery", "etalase", "toko"]);
   const iGudang = idx(["gudang", "warehouse"]);
   const iSystem = idx(["onsystem", "sistem", "system", "on"]);
+  const iExpired = idx(["expired", "kadaluarsa", "kedaluwarsa", "kadaluwarsa"]);
   if (iProduk < 0 || (iGrocery < 0 && iGudang < 0 && iSystem < 0)) {
     // header tidak dikenal — fallback: urutan umum (tanggal, produk, grocery, gudang, system)
     const guess = (k) => k < (rows[0].c || []).length ? (rows[0].c[k] || {}).v : null;
@@ -65,9 +66,25 @@ export async function fetchSoSheet() {
       grocery: parseNum(get(iGrocery)),
       gudang: parseNum(get(iGudang)),
       system: parseNum(get(iSystem)),
+      expired: parseExpired(get(iExpired)),
     });
   }
   return out;
+}
+
+/** Parse tanggal expired (Date(2026,7,31) dari gviz, atau dd/mm/yyyy) -> "YYYY-MM-DD" atau "" */
+function parseExpired(v) {
+  if (v === null || v === undefined) return "";
+  const s = String(v).trim();
+  if (!s) return "";
+  const m = s.match(/Date\((\d+),(\d+),(\d+)/);
+  if (m) return `${Number(m[1])}-${String(Number(m[2]) + 1).padStart(2, "0")}-${String(Number(m[3])).padStart(2, "0")}`;
+  const parts = s.split("/");
+  if (parts.length === 3) {
+    const [d, mo, y] = parts.map(Number);
+    if (d && mo && y) return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  }
+  return s; // tampilkan apa adanya
 }
 
 export function dummyRows() {

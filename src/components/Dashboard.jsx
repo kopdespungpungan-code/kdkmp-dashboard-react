@@ -13,6 +13,7 @@ export default function Dashboard({ onLock, theme, onToggleTheme, weather, weath
   const [rows, setRows] = useState([]);      // semua
   const [soRows, setSoRows] = useState([]);  // stok opname
   const [soStatus, setSoStatus] = useState({ kind: "ok", txt: "● SO" });
+  const [soDetail, setSoDetail] = useState(null); // produk yang dibuka detailnya
   // Default filter: bulan SAAT INI (bulan berjalan)
   const [month, setMonth] = useState(() => toMonthKey(new Date()));
   const [dStart, setDStart] = useState("");
@@ -88,7 +89,7 @@ export default function Dashboard({ onLock, theme, onToggleTheme, weather, weath
     return () => clearInterval(t);
   }, []);
 
-  // Ringkasan SO: total per lokasi + selisih
+  // Ringkasan SO: total per lokasi + selisih + expired
   const soStats = useMemo(() => {
     const s = { grocery: 0, gudang: 0, system: 0, items: soRows.length };
     const byProduct = {};
@@ -100,8 +101,9 @@ export default function Dashboard({ onLock, theme, onToggleTheme, weather, weath
       const cur = byProduct[k];
       if (cur) {
         cur.grocery += r.grocery; cur.gudang += r.gudang; cur.system += r.system;
+        if (r.expired && (!cur.expired || r.expired < cur.expired)) cur.expired = r.expired; // terdekat
       } else {
-        byProduct[k] = { produk: r.produk, grocery: r.grocery, gudang: r.gudang, system: r.system };
+        byProduct[k] = { produk: r.produk, grocery: r.grocery, gudang: r.gudang, system: r.system, expired: r.expired || "" };
       }
     });
     const fisik = s.grocery + s.gudang;
@@ -111,6 +113,30 @@ export default function Dashboard({ onLock, theme, onToggleTheme, weather, weath
       .sort((a, b) => Math.abs(b.selisih) - Math.abs(a.selisih));
     return s;
   }, [soRows]);
+
+  // ---- Route detail SO (hash #/so/<produk>) ----
+  const openSoDetail = (produk) => {
+    setSoDetail(produk);
+    try { history.replaceState(null, "", "#/so/" + encodeURIComponent(produk)); } catch (e) {}
+  };
+  const closeSoDetail = () => {
+    setSoDetail(null);
+    try { history.replaceState(null, "", "#"); } catch (e) {}
+  };
+  useEffect(() => {
+    const onHash = () => {
+      const m = window.location.hash.match(/^#\/so\/(.+)$/);
+      if (m) { try { setSoDetail(decodeURIComponent(m[1])); } catch (e) {} }
+    };
+    window.addEventListener("hashchange", onHash);
+    onHash(); // baca hash awal (mis. buka langsung dari URL)
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+  // Produk detail yang sedang dibuka (dari soStats.list)
+  const soDetailItem = useMemo(() => {
+    if (!soDetail) return null;
+    return soStats.list.find(p => p.produk === soDetail) || null;
+  }, [soDetail, soStats]);
 
   const months = useMemo(() => [...new Set(rows.map(r => toMonthKey(r.date)))].sort().reverse(), [rows]);
 
@@ -349,17 +375,25 @@ export default function Dashboard({ onLock, theme, onToggleTheme, weather, weath
                         <th className="num">Gudang</th>
                         <th className="num">Fisik</th>
                         <th className="num">System</th>
+                        <th className="num">Expired</th>
                         <th className="num">Selisih</th>
                       </tr>
                     </thead>
                     <tbody>
                       {soStats.list.map((p, i) => (
                         <tr key={i} className={p.selisih === 0 ? "" : "so-row-mismatch"}>
-                          <td>{p.produk}</td>
+                          <td>
+                            <button className="so-prod-link" onClick={() => openSoDetail(p.produk)} title={"Buka detail " + p.produk}>
+                              {p.produk} →
+                            </button>
+                          </td>
                           <td className="num">{p.grocery}</td>
                           <td className="num">{p.gudang}</td>
                           <td className="num">{p.fisik}</td>
                           <td className="num">{p.system}</td>
+                          <td className={"num so-exp" + (isExpiredSoon(p.expired) ? " so-exp-warn" : "")}>
+                            {p.expired ? fmtExpired(p.expired) : "—"}
+                          </td>
                           <td className={"num so-sel" + (p.selisih > 0 ? " so-pos" : p.selisih < 0 ? " so-neg" : "")}>
                             {p.selisih > 0 ? "+" : ""}{p.selisih}
                           </td>
@@ -368,6 +402,51 @@ export default function Dashboard({ onLock, theme, onToggleTheme, weather, weath
                     </tbody>
                   </table>
                 </div>
+                {soDetailItem && (
+                  <div className="so-detail">
+                    <div className="so-detail-head">
+                      <div>
+                        <div className="so-detail-kicker">Detail SO</div>
+                        <div className="so-detail-title">📦 {soDetailItem.produk}</div>
+                      </div>
+                      <button className="so-back" onClick={closeSoDetail}>← Kembali ke SO</button>
+                    </div>
+                    <div className="so-detail-grid">
+                      <div className="so-detail-card">
+                        <div className="lbl">🏪 Stock Grocery</div>
+                        <div className="val">{soDetailItem.grocery}</div>
+                        <div className="sub">stok toko/etalase</div>
+                      </div>
+                      <div className="so-detail-card">
+                        <div className="lbl">📦 Stock Gudang</div>
+                        <div className="val">{soDetailItem.gudang}</div>
+                        <div className="sub">stok gudang</div>
+                      </div>
+                      <div className="so-detail-card">
+                        <div className="lbl">🖥️ Stock On System</div>
+                        <div className="val">{soDetailItem.system}</div>
+                        <div className="sub">stok di sistem</div>
+                      </div>
+                      <div className={"so-detail-card" + (soDetailItem.selisih === 0 ? "" : " so-mismatch")}>
+                        <div className="lbl">⚖️ Selisih</div>
+                        <div className="val">{soDetailItem.selisih > 0 ? "+" : ""}{soDetailItem.selisih}</div>
+                        <div className="sub">fisik {soDetailItem.fisik} − system</div>
+                      </div>
+                      <div className={"so-detail-card" + (isExpiredSoon(soDetailItem.expired) ? " so-exp-warn" : "")}>
+                        <div className="lbl">📅 Expired</div>
+                        <div className="val">{soDetailItem.expired ? fmtExpired(soDetailItem.expired) : "—"}</div>
+                        <div className="sub">{soDetailItem.expired ? (isExpiredSoon(soDetailItem.expired) ? "⚠️ dekat kadaluarsa / lewat" : "masih aman") : "tidak diisi"}</div>
+                      </div>
+                    </div>
+                    <div className="so-detail-note">
+                      {soDetailItem.selisih === 0
+                        ? "✅ Stok fisik sesuai sistem — tidak ada selisih."
+                        : soDetailItem.selisih > 0
+                          ? "⚠️ Stok fisik LEBIH BANYAK dari sistem (+" + soDetailItem.selisih + "). Periksa kemungkinan barang belum di-input / salah catat."
+                          : "⚠️ Stok fisik KURANG dari sistem (" + soDetailItem.selisih + "). Periksa kemungkinan barang hilang / salah input / belum dicatat."}
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </CardContent>
@@ -511,6 +590,26 @@ export default function Dashboard({ onLock, theme, onToggleTheme, weather, weath
 
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+/* Format tanggal expired "YYYY-MM-DD" -> "dd/mm/yyyy" (atau apa adanya) */
+function fmtExpired(v) {
+  if (!v) return "";
+  const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return m[3] + "/" + m[2] + "/" + m[1];
+  return String(v);
+}
+
+/* Apakah expired dalam <= 30 hari ke depan (atau sudah lewat) */
+function isExpiredSoon(v) {
+  if (!v) return false;
+  const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return false;
+  const t = new Date(+m[1], +m[2] - 1, +m[3]).getTime();
+  if (isNaN(t)) return false;
+  const now = Date.now();
+  const day = 86400000;
+  return t < now + 30 * day; // sudah lewat atau dalam 30 hari
 }
 
 /* Animasi angka count-up ala SpaceX telemetry */
