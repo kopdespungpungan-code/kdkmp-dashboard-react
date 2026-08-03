@@ -36,3 +36,4 @@ tunnel_check.html
 db/*.db
 db/*.db-wal
 db/*.db-shm
+so_check.json
