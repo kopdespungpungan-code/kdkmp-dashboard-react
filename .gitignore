@@ -26,3 +26,13 @@ Thumbs.db
 
 # worklog / temp
 tunnel_check.html
+
+# database (data lokal — opsional di-commit)
+# db/*.db
+# db/*.db-wal
+# db/*.db-shm
+
+# database (tidak dipakai — input via Google Form/Sheets)
+db/*.db
+db/*.db-wal
+db/*.db-shm
