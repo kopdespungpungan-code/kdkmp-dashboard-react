@@ -218,10 +218,99 @@ def main():
     for i, w in enumerate([20, 12, 12, 14, 12, 12], 1):
         ws3.column_dimensions[get_column_letter(i)].width = w
 
+    # ===== Sheet 4: PER MINGGU =====
+    # Rekap per petugas per Minggu 1-4 (periode laporan). Data SO adalah snapshot
+    # stok opname; pembagian minggu memakai minggu berjalan periode laporan.
+    from datetime import date
+    today = date.today()
+    bulan_label = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"][today.month - 1]
+    minggu_ke = min(4, (today.day - 1) // 7 + 1)
+
+    ws4 = wb.create_sheet("PER MINGGU")
+    ws4.sheet_view.showGridLines = False
+    ws4.append([f"REKAP STOK PER MINGGU — {bulan_label.upper()} {today.year}"])
+    ws4["A1"].font = Font(bold=True, size=13, color="1E3A5F")
+    ws4.append(["Data opname snapshot; minggu berjalan: Minggu " + str(minggu_ke) + " (periode ini)."])
+    ws4.append([])
+    headers4 = ["MINGGU", "PETUGAS", "JUMLAH ITEM", "TOTAL FISIK", "TOTAL GROCERY", "TOTAL GUDANG", "TOTAL SISTEM"]
+    ws4.append(headers4)
+    for c in range(1, len(headers4) + 1):
+        cell = ws4.cell(row=4, column=c)
+        cell.fill = head_fill; cell.font = head_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = border
+
+    # baris per minggu (1-4) — data ditempatkan di minggu berjalan
+    for m in range(1, 5):
+        for p, v in sorted(agg.items(), key=lambda x: -x[1]["fisik"]):
+            ws4.append([f"Minggu {m}", p, v["n"] if m == minggu_ke else 0,
+                        v["fisik"] if m == minggu_ke else 0,
+                        v["grocery"] if m == minggu_ke else 0,
+                        v["gudang"] if m == minggu_ke else 0,
+                        v["sistem"] if m == minggu_ke else 0])
+            row = ws4.max_row
+            for c in range(1, len(headers4) + 1):
+                cell = ws4.cell(row=row, column=c); cell.border = border
+                if c >= 3: cell.alignment = Alignment(horizontal="right")
+                if m == minggu_ke:
+                    cell.fill = fisik_fill
+    # total per minggu
+    for m in range(1, 5):
+        vals = [0,0,0,0,0] if m != minggu_ke else [
+            sum(v["n"] for v in agg.values()),
+            sum(v["fisik"] for v in agg.values()),
+            sum(v["grocery"] for v in agg.values()),
+            sum(v["gudang"] for v in agg.values()),
+            sum(v["sistem"] for v in agg.values())]
+        ws4.append([f"TOTAL Minggu {m}", "—"] + vals)
+        row = ws4.max_row
+        for c in range(1, len(headers4) + 1):
+            cell = ws4.cell(row=row, column=c); cell.border = border
+            if c >= 3: cell.alignment = Alignment(horizontal="right")
+            cell.font = Font(bold=True)
+    for i, w in enumerate([16, 16, 12, 12, 14, 12, 12], 1):
+        ws4.column_dimensions[get_column_letter(i)].width = w
+    ws4.freeze_panes = "A5"
+
+    # ===== Sheet 5: PER BULAN =====
+    ws5 = wb.create_sheet("PER BULAN")
+    ws5.sheet_view.showGridLines = False
+    ws5.append([f"REKAP STOK PER BULAN — {bulan_label.upper()} {today.year}"])
+    ws5["A1"].font = Font(bold=True, size=13, color="1E3A5F")
+    ws5.append([])
+    headers5 = ["BULAN", "PETUGAS", "JUMLAH ITEM", "TOTAL FISIK", "TOTAL GROCERY", "TOTAL GUDANG", "TOTAL SISTEM"]
+    ws5.append(headers5)
+    for c in range(1, len(headers5) + 1):
+        cell = ws5.cell(row=3, column=c)
+        cell.fill = head_fill; cell.font = head_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = border
+    bln = f"{bulan_label} {today.year}"
+    for p, v in sorted(agg.items(), key=lambda x: -x[1]["fisik"]):
+        ws5.append([bln, p, v["n"], v["fisik"], v["grocery"], v["gudang"], v["sistem"]])
+        row = ws5.max_row
+        for c in range(1, len(headers5) + 1):
+            cell = ws5.cell(row=row, column=c); cell.border = border
+            if c >= 3: cell.alignment = Alignment(horizontal="right")
+    ws5.append([bln, "TOTAL",
+                sum(v["n"] for v in agg.values()),
+                sum(v["fisik"] for v in agg.values()),
+                sum(v["grocery"] for v in agg.values()),
+                sum(v["gudang"] for v in agg.values()),
+                sum(v["sistem"] for v in agg.values())])
+    row = ws5.max_row
+    for c in range(1, len(headers5) + 1):
+        cell = ws5.cell(row=row, column=c); cell.border = border
+        if c >= 3: cell.alignment = Alignment(horizontal="right")
+        cell.font = Font(bold=True)
+    for i, w in enumerate([18, 16, 12, 12, 14, 12, 12], 1):
+        ws5.column_dimensions[get_column_letter(i)].width = w
+    ws5.freeze_panes = "A4"
+
     wb.save(OUT)
     print(f"✅ Laporan tersimpan: {OUT}")
     print(f"Produk: {len(rows)} | Fisik terisi: {sum(1 for s in rows if s['fisik'])} | DEDIK: {len(dedik)} item")
-    print("Sheet: LAPORAN SO | DEDIK KURNIAWAN | REKAP PETUGAS")
+    print("Sheet: LAPORAN SO | DEDIK KURNIAWAN | REKAP PETUGAS | PER MINGGU | PER BULAN")
 
 if __name__ == "__main__":
     main()
