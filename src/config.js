@@ -5,7 +5,7 @@ export const CONFIG = {
   FORM_SHEET_ID: "",
   // Spreadsheet RESPONS formulir SO (Stok Opname): kolom Stock Grocery, Stock Gudang, Stock On System.
   // Isi ID-nya untuk mengaktifkan panel SO. Kosong = panel menampilkan panduan.
-  SO_SHEET_ID: "",
+  SO_SHEET_ID: "1V6dStO_eyyrfSw-a5686JS4SbabAAZih",
   PIN_HASH: "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
   REFRESH_MINUTES: 5,
   TITLE: "Dashboard Penjualan KDKMP",
@@ -20,6 +20,14 @@ export const WEATHER = {
 };
 export const SHEET_URL = "https://docs.google.com/spreadsheets/d/" + CONFIG.SHEET_ID + "/gviz/tq?tqx=out:json";
 export const SO_SHEET_ID = CONFIG.SO_SHEET_ID;
+// Mapping petugas per gondola (fallback bila kolom Paraf/Petugas di sheet belum diisi).
+// Format: [ [gondolaAwal, gondolaAkhir, nama], ... ]
+export const SO_PETUGAS_GONDOLA = [
+  [1, 12, "VYRDA"],
+  [13, 24, "PANDU"],
+  [25, 36, "RISTA"],
+  [37, 48, "DEDIK"],
+];
 export const FORM_SHEET_URL = CONFIG.FORM_SHEET_ID
   ? "https://docs.google.com/spreadsheets/d/" + CONFIG.FORM_SHEET_ID + "/gviz/tq?tqx=out:json"
   : "";

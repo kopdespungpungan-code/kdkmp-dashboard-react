@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { CONFIG, PER_PAGE, SO_SHEET_ID } from '../config';
+import { CONFIG, PER_PAGE, SO_SHEET_ID, SO_PETUGAS_GONDOLA } from '../config';
 import { fetchSheet, fetchSoSheet, dummyRows } from '../lib/sheet';
 import { fmtRp, fmtDate, toMonthKey, monthLabel, pad2, isToday, nowLabel } from '../lib/utils';
 import { TOD_META } from '../lib/daytime';
@@ -89,9 +89,9 @@ export default function Dashboard({ onLock, theme, onToggleTheme, weather, weath
     return () => clearInterval(t);
   }, []);
 
-  // Ringkasan SO: total per lokasi + selisih + expired
+  // Ringkasan SO: total per lokasi + selisih + expired + petugas
   const soStats = useMemo(() => {
-    const s = { grocery: 0, gudang: 0, system: 0, items: soRows.length };
+    const s = { grocery: 0, gudang: 0, system: 0, items: soRows.length, mode: soRows[0]?.mode || "classic" };
     const byProduct = {};
     soRows.forEach(r => {
       s.grocery += r.grocery;
@@ -99,11 +99,23 @@ export default function Dashboard({ onLock, theme, onToggleTheme, weather, weath
       s.system += r.system;
       const k = r.produk.toUpperCase();
       const cur = byProduct[k];
+      // Petugas: dari sheet kalau ada, kalau tidak dari mapping gondola
+      let ptg = (r.petugas || "").trim();
+      if (!ptg && r.gondola) {
+        const g = parseInt(r.gondola, 10);
+        if (!isNaN(g)) {
+          for (const [a, b, n] of SO_PETUGAS_GONDOLA) {
+            if (g >= a && g <= b) { ptg = n; break; }
+          }
+        }
+      }
       if (cur) {
         cur.grocery += r.grocery; cur.gudang += r.gudang; cur.system += r.system;
         if (r.expired && (!cur.expired || r.expired < cur.expired)) cur.expired = r.expired; // terdekat
+        if (ptg && !cur.petugas) cur.petugas = ptg;
+        if (r.gondola && !cur.gondola) cur.gondola = r.gondola;
       } else {
-        byProduct[k] = { produk: r.produk, grocery: r.grocery, gudang: r.gudang, system: r.system, expired: r.expired || "" };
+        byProduct[k] = { produk: r.produk, grocery: r.grocery, gudang: r.gudang, system: r.system, expired: r.expired || "", petugas: ptg, gondola: r.gondola || "" };
       }
     });
     const fisik = s.grocery + s.gudang;
@@ -346,24 +358,41 @@ export default function Dashboard({ onLock, theme, onToggleTheme, weather, weath
               <>
                 <div className="so-kpis">
                   <div className="so-kpi">
-                    <div className="lbl">🏪 Stock Grocery</div>
+                    <div className="lbl">{soStats.mode === "gondola" ? "📦 Total Qty Fisik" : "🏪 Stock Grocery"}</div>
                     <div className="val">{soStats.grocery}</div>
-                    <div className="sub">stok toko/etalase</div>
+                    <div className="sub">{soStats.mode === "gondola" ? "stok fisik dari sheet gondola" : "stok toko/etalase"}</div>
                   </div>
-                  <div className="so-kpi">
-                    <div className="lbl">📦 Stock Gudang</div>
-                    <div className="val">{soStats.gudang}</div>
-                    <div className="sub">stok gudang</div>
-                  </div>
-                  <div className="so-kpi">
-                    <div className="lbl">🖥️ Stock On System</div>
-                    <div className="val">{soStats.system}</div>
-                    <div className="sub">stok di sistem</div>
-                  </div>
-                  <div className={"so-kpi" + (soStats.selisih === 0 ? "" : " so-mismatch")}>
-                    <div className="lbl">⚖️ Selisih (Fisik − System)</div>
-                    <div className="val">{soStats.selisih > 0 ? "+" : ""}{soStats.selisih}</div>
-                    <div className="sub">fisik {soStats.fisik} · {soStats.items} entri</div>
+                  {soStats.mode === "gondola" ? (
+                    <>
+                      <div className="so-kpi">
+                        <div className="lbl">🏬 Entri Gondola</div>
+                        <div className="val">{soStats.items}</div>
+                        <div className="sub">baris produk terisi</div>
+                      </div>
+                      <div className="so-kpi">
+                        <div className="lbl">🧑‍🌾 Petugas</div>
+                        <div className="val">{new Set(soStats.list.map(p => p.petugas).filter(Boolean)).size}</div>
+                        <div className="sub">penanggung jawab gondola</div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="so-kpi">
+                        <div className="lbl">📦 Stock Gudang</div>
+                        <div className="val">{soStats.gudang}</div>
+                        <div className="sub">stok gudang</div>
+                      </div>
+                      <div className="so-kpi">
+                        <div className="lbl">🖥️ Stock On System</div>
+                        <div className="val">{soStats.system}</div>
+                        <div className="sub">stok di sistem</div>
+                      </div>
+                    </>
+                  )}
+                  <div className={"so-kpi" + (soStats.mode === "gondola" ? "" : soStats.selisih === 0 ? "" : " so-mismatch")}>
+                    <div className="lbl">{soStats.mode === "gondola" ? "⚡ Barang Terisi" : "⚖️ Selisih (Fisik − System)"}</div>
+                    <div className="val">{soStats.mode === "gondola" ? soStats.list.length : (soStats.selisih > 0 ? "+" : "") + soStats.selisih}</div>
+                    <div className="sub">{soStats.mode === "gondola" ? "produk unik" : "fisik " + soStats.fisik + " · " + soStats.items + " entri"}</div>
                   </div>
                 </div>
                 <div className="so-table-wrap">
@@ -371,12 +400,14 @@ export default function Dashboard({ onLock, theme, onToggleTheme, weather, weath
                     <thead>
                       <tr>
                         <th>Produk</th>
-                        <th className="num">Grocery</th>
-                        <th className="num">Gudang</th>
-                        <th className="num">Fisik</th>
-                        <th className="num">System</th>
+                        <th>Petugas</th>
+                        <th className="num">Gondola</th>
+                        <th className="num">{soStats.mode === "gondola" ? "Qty Fisik" : "Grocery"}</th>
+                        {soStats.mode !== "gondola" && <th className="num">Gudang</th>}
+                        {soStats.mode !== "gondola" && <th className="num">Fisik</th>}
+                        <th className="num">{soStats.mode === "gondola" ? "Satuan" : "System"}</th>
                         <th className="num">Expired</th>
-                        <th className="num">Selisih</th>
+                        {soStats.mode !== "gondola" && <th className="num">Selisih</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -387,16 +418,20 @@ export default function Dashboard({ onLock, theme, onToggleTheme, weather, weath
                               {p.produk} →
                             </button>
                           </td>
+                          <td className="so-petugas">{p.petugas || "—"}</td>
+                          <td className="num">{p.gondola || "—"}</td>
                           <td className="num">{p.grocery}</td>
-                          <td className="num">{p.gudang}</td>
-                          <td className="num">{p.fisik}</td>
-                          <td className="num">{p.system}</td>
+                          {soStats.mode !== "gondola" && <td className="num">{p.gudang}</td>}
+                          {soStats.mode !== "gondola" && <td className="num">{p.fisik}</td>}
+                          <td className="num">{soStats.mode === "gondola" ? (p.satuan || "—") : p.system}</td>
                           <td className={"num so-exp" + (isExpiredSoon(p.expired) ? " so-exp-warn" : "")}>
                             {p.expired ? fmtExpired(p.expired) : "—"}
                           </td>
-                          <td className={"num so-sel" + (p.selisih > 0 ? " so-pos" : p.selisih < 0 ? " so-neg" : "")}>
-                            {p.selisih > 0 ? "+" : ""}{p.selisih}
-                          </td>
+                          {soStats.mode !== "gondola" && (
+                            <td className={"num so-sel" + (p.selisih > 0 ? " so-pos" : p.selisih < 0 ? " so-neg" : "")}>
+                              {p.selisih > 0 ? "+" : ""}{p.selisih}
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -413,37 +448,63 @@ export default function Dashboard({ onLock, theme, onToggleTheme, weather, weath
                     </div>
                     <div className="so-detail-grid">
                       <div className="so-detail-card">
-                        <div className="lbl">🏪 Stock Grocery</div>
+                        <div className="lbl">{soStats.mode === "gondola" ? "📦 Qty Fisik" : "🏪 Stock Grocery"}</div>
                         <div className="val">{soDetailItem.grocery}</div>
-                        <div className="sub">stok toko/etalase</div>
+                        <div className="sub">{soStats.mode === "gondola" ? "stok fisik" : "stok toko/etalase"}</div>
                       </div>
-                      <div className="so-detail-card">
-                        <div className="lbl">📦 Stock Gudang</div>
-                        <div className="val">{soDetailItem.gudang}</div>
-                        <div className="sub">stok gudang</div>
-                      </div>
-                      <div className="so-detail-card">
-                        <div className="lbl">🖥️ Stock On System</div>
-                        <div className="val">{soDetailItem.system}</div>
-                        <div className="sub">stok di sistem</div>
-                      </div>
-                      <div className={"so-detail-card" + (soDetailItem.selisih === 0 ? "" : " so-mismatch")}>
-                        <div className="lbl">⚖️ Selisih</div>
-                        <div className="val">{soDetailItem.selisih > 0 ? "+" : ""}{soDetailItem.selisih}</div>
-                        <div className="sub">fisik {soDetailItem.fisik} − system</div>
-                      </div>
+                      {soStats.mode === "gondola" ? (
+                        <>
+                          <div className="so-detail-card">
+                            <div className="lbl">🏬 Gondola</div>
+                            <div className="val">{soDetailItem.gondola || "—"}</div>
+                            <div className="sub">lokasi rak</div>
+                          </div>
+                          <div className="so-detail-card">
+                            <div className="lbl">📏 Satuan</div>
+                            <div className="val">{soDetailItem.satuan || "—"}</div>
+                            <div className="sub">unit</div>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="so-detail-card">
+                            <div className="lbl">📦 Stock Gudang</div>
+                            <div className="val">{soDetailItem.gudang}</div>
+                            <div className="sub">stok gudang</div>
+                          </div>
+                          <div className="so-detail-card">
+                            <div className="lbl">🖥️ Stock On System</div>
+                            <div className="val">{soDetailItem.system}</div>
+                            <div className="sub">stok di sistem</div>
+                          </div>
+                          <div className={"so-detail-card" + (soDetailItem.selisih === 0 ? "" : " so-mismatch")}>
+                            <div className="lbl">⚖️ Selisih</div>
+                            <div className="val">{soDetailItem.selisih > 0 ? "+" : ""}{soDetailItem.selisih}</div>
+                            <div className="sub">fisik {soDetailItem.fisik} − system</div>
+                          </div>
+                        </>
+                      )}
                       <div className={"so-detail-card" + (isExpiredSoon(soDetailItem.expired) ? " so-exp-warn" : "")}>
                         <div className="lbl">📅 Expired</div>
                         <div className="val">{soDetailItem.expired ? fmtExpired(soDetailItem.expired) : "—"}</div>
                         <div className="sub">{soDetailItem.expired ? (isExpiredSoon(soDetailItem.expired) ? "⚠️ dekat kadaluarsa / lewat" : "masih aman") : "tidak diisi"}</div>
                       </div>
+                      <div className="so-detail-card">
+                        <div className="lbl">🧑‍🌾 Petugas</div>
+                        <div className="val so-petugas-val">{soDetailItem.petugas || "—"}</div>
+                        <div className="sub">{soStats.mode === "gondola" ? "penanggung jawab gondola" : "petugas"}</div>
+                      </div>
                     </div>
                     <div className="so-detail-note">
-                      {soDetailItem.selisih === 0
-                        ? "✅ Stok fisik sesuai sistem — tidak ada selisih."
-                        : soDetailItem.selisih > 0
-                          ? "⚠️ Stok fisik LEBIH BANYAK dari sistem (+" + soDetailItem.selisih + "). Periksa kemungkinan barang belum di-input / salah catat."
-                          : "⚠️ Stok fisik KURANG dari sistem (" + soDetailItem.selisih + "). Periksa kemungkinan barang hilang / salah input / belum dicatat."}
+                      {soStats.mode === "gondola"
+                        ? (soDetailItem.expired && isExpiredSoon(soDetailItem.expired)
+                            ? "⚠️ Perhatian: expired dekat / sudah lewat — segera cek fisik barang."
+                            : "✅ Catatan stok gondola: qty fisik + expired terpantau.")
+                        : (soDetailItem.selisih === 0
+                            ? "✅ Stok fisik sesuai sistem — tidak ada selisih."
+                            : soDetailItem.selisih > 0
+                              ? "⚠️ Stok fisik LEBIH BANYAK dari sistem (+" + soDetailItem.selisih + "). Periksa kemungkinan barang belum di-input / salah catat."
+                              : "⚠️ Stok fisik KURANG dari sistem (" + soDetailItem.selisih + "). Periksa kemungkinan barang hilang / salah input / belum dicatat.")}
                     </div>
                   </div>
                 )}
