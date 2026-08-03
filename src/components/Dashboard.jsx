@@ -8,12 +8,15 @@ import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import SoItemsPage from './SoItemsPage';
+import SoInputPage from './SoInputPage';
 
 export default function Dashboard({ onLock, theme, onToggleTheme, weather, weatherEnabled, onToggleWeather, tod }) {
   const [rows, setRows] = useState([]);      // semua
   const [soRows, setSoRows] = useState([]);  // stok opname
   const [soStatus, setSoStatus] = useState({ kind: "ok", txt: "● SO" });
   const [soDetail, setSoDetail] = useState(null); // produk yang dibuka detailnya
+  const [soPage, setSoPage] = useState(null);      // "items" | "input" (route tambahan)
   // Default filter: bulan SAAT INI (bulan berjalan)
   const [month, setMonth] = useState(() => toMonthKey(new Date()));
   const [dStart, setDStart] = useState("");
@@ -135,10 +138,24 @@ export default function Dashboard({ onLock, theme, onToggleTheme, weather, weath
     setSoDetail(null);
     try { history.replaceState(null, "", "#"); } catch (e) {}
   };
+  const goSoItems = () => {
+    setSoPage("items");
+    try { history.replaceState(null, "", "#/so-items"); } catch (e) {}
+  };
+  const goSoInput = () => {
+    setSoPage("input");
+    try { history.replaceState(null, "", "#/so-input"); } catch (e) {}
+  };
+  const closeSoPage = () => {
+    setSoPage(null);
+    try { history.replaceState(null, "", "#"); } catch (e) {}
+  };
   useEffect(() => {
     const onHash = () => {
       const m = window.location.hash.match(/^#\/so\/(.+)$/);
-      if (m) { try { setSoDetail(decodeURIComponent(m[1])); } catch (e) {} }
+      if (m) { try { setSoDetail(decodeURIComponent(m[1])); setSoPage(null); } catch (e) {} }
+      else if (window.location.hash.startsWith("#/so-items")) { setSoDetail(null); setSoPage("items"); }
+      else if (window.location.hash.startsWith("#/so-input")) { setSoDetail(null); setSoPage("input"); }
     };
     window.addEventListener("hashchange", onHash);
     onHash(); // baca hash awal (mis. buka langsung dari URL)
@@ -343,10 +360,20 @@ export default function Dashboard({ onLock, theme, onToggleTheme, weather, weath
               {SO_SHEET_ID && (
                 <Badge variant={soStatus.kind === "ok" ? "default" : "destructive"} className="chip-badge">{soStatus.txt}</Badge>
               )}
+              {SO_SHEET_ID && (
+                <span className="so-nav-btns">
+                  <button className="so-nav-btn" onClick={goSoItems} title="Lihat detail semua item SO">📋 Detail Item</button>
+                  <button className="so-nav-btn" onClick={goSoInput} title="Input stok opname per petugas">✏️ Input SO</button>
+                </span>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {!SO_SHEET_ID ? (
+            {soPage === "items" ? (
+              <SoItemsPage onBack={closeSoPage} soRows={soRows} />
+            ) : soPage === "input" ? (
+              <SoInputPage onBack={closeSoPage} soRows={soRows} />
+            ) : !SO_SHEET_ID ? (
               <div className="empty-state so-empty">
                 📋 <b>Panel SO (Stok Opname) siap.</b><br />
                 Data stok diambil dari Google Form/Sheet SO.<br />

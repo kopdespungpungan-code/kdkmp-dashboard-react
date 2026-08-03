@@ -202,6 +202,47 @@
 .so-detail-card.so-mismatch{border-color:var(--accent);box-shadow:0 0 12px rgba(220,38,38,.28)}
 .so-detail-card.so-mismatch .val{color:var(--accent)}
 .so-detail-note{margin-top:14px;padding:10px 12px;border-radius:10px;background:var(--bg-input);border:1px solid var(--border);font-size:12.5px;line-height:1.6}
+
+/* ===== Halaman Detail & Input SO ===== */
+.so-nav-btns{display:inline-flex;gap:6px;margin-left:auto}
+.so-nav-btn{background:var(--bg-input);border:1px solid var(--border);color:var(--text);border-radius:999px;padding:5px 12px;font-size:11.5px;cursor:pointer;font-family:var(--font);transition:all .2s}
+.so-nav-btn:hover{border-color:var(--accent);color:var(--accent)}
+.so-page{padding:4px 2px}
+.so-page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.so-page-title{font-size:17px;font-weight:800;margin-top:2px}
+.so-page-actions{display:flex;gap:8px;flex-wrap:wrap}
+.so-page-filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.so-select{background:var(--bg-input);border:1px solid var(--border);color:var(--text);border-radius:10px;padding:8px 12px;font-size:13px;font-family:var(--font);max-width:100%}
+.so-select-big{min-width:180px}
+.so-search{background:var(--bg-input);border:1px solid var(--border);color:var(--text);border-radius:10px;padding:8px 12px;font-size:13px;font-family:var(--font);min-width:150px;flex:1}
+.so-search:disabled{opacity:.5}
+.so-page-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:12px}
+.so-sum-box{background:var(--bg-input);border:1px solid var(--border);border-radius:12px;padding:10px 12px;text-align:center}
+.so-sum-box .lbl{font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--text-dim)}
+.so-sum-box .val{font-size:20px;font-weight:800;margin-top:3px;font-family:var(--font-mono)}
+.so-summary-grid{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.so-sum-chip{background:var(--bg-input);border:1px solid var(--border);border-radius:999px;padding:6px 12px;display:inline-flex;gap:8px;align-items:center;font-size:12.5px}
+.so-sum-name{font-weight:700}
+.so-sum-val{font-family:var(--font-mono);font-weight:700;color:var(--accent)}
+.so-empty-row{padding:18px;text-align:center;color:var(--text-dim);font-size:13px}
+.so-page-foot{margin-top:10px;text-align:right}
+.so-status{font-size:11px;color:var(--text-dim)}
+.so-msg{background:var(--bg-input);border:1px solid var(--green-border);color:var(--green);border-radius:10px;padding:8px 12px;font-size:12.5px;margin-bottom:10px}
+.so-last-saved{background:var(--bg-input);border:1px dashed var(--border);border-radius:10px;padding:8px 12px;font-size:12px;color:var(--text-dim);margin-bottom:12px}
+.so-input-list{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;max-height:56vh;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-right:4px}
+.so-input-row{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--bg-input);border:1px solid var(--border);border-radius:12px;padding:9px 12px}
+.so-input-info{min-width:0}
+.so-input-produk{font-size:13px;font-weight:600;word-break:break-word}
+.so-input-sub{font-size:11px;color:var(--text-dim);margin-top:2px}
+.so-input-qty{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.so-qty-btn{width:32px;height:32px;border-radius:9px;border:1px solid var(--border);background:var(--bg-card);color:var(--text);font-size:16px;cursor:pointer;font-family:var(--font-mono);transition:all .15s}
+.so-qty-btn:hover{border-color:var(--accent);color:var(--accent)}
+.so-qty-input{width:64px;text-align:center;background:var(--bg-card);border:1px solid var(--border);color:var(--text);border-radius:9px;padding:6px 4px;font-size:14px;font-family:var(--font-mono)}
+.so-save-bar{margin-top:4px}
+.so-btn-primary{background:var(--accent);color:#fff;border:none;border-radius:999px;padding:10px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font);transition:all .2s}
+.so-btn-primary:hover{filter:brightness(1.1)}
+.so-btn-ghost{background:var(--bg-input);border:1px solid var(--border);color:var(--text);border-radius:999px;padding:10px 16px;font-size:13px;cursor:pointer;font-family:var(--font);transition:all .2s}
+.so-btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
 /* Chip cuaca di header */
 .weather-chip{white-space:nowrap}
 .weather-wet{border-color:var(--accent);color:var(--text);box-shadow:0 0 10px rgba(220,38,38,.25)}

@@ -58,9 +58,11 @@ export async function fetchSoSheet() {
   // Fallback POSISI TETAP bila baris pertama bukan header (mis. Google Fresh: No|Gondola|Tingkat|Nama Barang|Satuan|Qty Fisik|Keterangan|Paraf)
   const hasHeader = header.some(h => h.includes("produk") || h.includes("barang") || h.includes("gondola"));
   if (iProduk < 0 && !hasHeader) {
+    let curGond = "";
     for (const r of rows) {
       const c = r.c || [];
       const get = (k) => (k >= 0 && c[k] && c[k].v !== undefined && c[k].v !== null) ? c[k].v : null;
+      if (get(1) !== null && get(1) !== undefined) curGond = String(get(1)).trim(); // gondola berlanjut dari baris sebelumnya
       const produk = String(get(3) || "").trim();
       if (!produk || produk === "-") continue;
       out.push({
@@ -71,7 +73,7 @@ export async function fetchSoSheet() {
         satuan: String(get(4) || "").trim(),
         expired: parseExpired(get(6)),  // Keterangan berisi "exp 09-05-28"
         petugas: String(get(7) || "").trim(), // Paraf
-        gondola: String(get(1) || "").trim(),
+        gondola: curGond,
         mode: "gondola",
       });
     }
