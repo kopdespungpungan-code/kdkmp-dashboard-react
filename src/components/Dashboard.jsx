@@ -1,22 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { CONFIG, PER_PAGE, SO_SHEET_ID, SO_PETUGAS_GONDOLA } from '../config';
-import { fetchSheet, fetchSoSheet, dummyRows } from '../lib/sheet';
+import { CONFIG, PER_PAGE } from '../config';
+import { fetchSheet, dummyRows } from '../lib/sheet';
 import { fmtRp, fmtDate, toMonthKey, monthLabel, pad2, isToday, nowLabel } from '../lib/utils';
 import { TOD_META } from '../lib/daytime';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import SoItemsPage from './SoItemsPage';
-import SoInputPage from './SoInputPage';
 
-export default function Dashboard({ onLock, theme, onToggleTheme, weather, weatherEnabled, onToggleWeather, tod }) {
+export default function Dashboard({ onLock, weather, weatherEnabled, onToggleWeather, tod, onOpenSo }) {
   const [rows, setRows] = useState([]);      // semua
-  const [soRows, setSoRows] = useState([]);  // stok opname
-  const [soStatus, setSoStatus] = useState({ kind: "ok", txt: "● SO" });
-  const [soDetail, setSoDetail] = useState(null); // produk yang dibuka detailnya
-  const [soPage, setSoPage] = useState(null);      // "items" | "input" (route tambahan)
   // Default filter: bulan SAAT INI (bulan berjalan)
   const [month, setMonth] = useState(() => toMonthKey(new Date()));
   const [dStart, setDStart] = useState("");
@@ -73,99 +67,6 @@ export default function Dashboard({ onLock, theme, onToggleTheme, weather, weath
     const t = setInterval(() => load(true), CONFIG.REFRESH_MINUTES * 60 * 1000);
     return () => clearInterval(t);
   }, []);
-
-  // ---- SO (Stok Opname) ----
-  const loadSo = async () => {
-    if (!SO_SHEET_ID) { setSoRows([]); return; }
-    try {
-      const raw = await fetchSoSheet();
-      setSoRows(raw);
-      setSoStatus({ kind: "ok", txt: "● SO" });
-    } catch (err) {
-      console.error(err);
-      setSoStatus({ kind: "err", txt: "● SO gagal" });
-    }
-  };
-  useEffect(() => { loadSo(); /* eslint-disable-next-line */ }, []);
-  useEffect(() => {
-    const t = setInterval(() => loadSo(), CONFIG.REFRESH_MINUTES * 60 * 1000);
-    return () => clearInterval(t);
-  }, []);
-
-  // Ringkasan SO: total per lokasi + selisih + expired + petugas
-  const soStats = useMemo(() => {
-    const s = { grocery: 0, gudang: 0, system: 0, items: soRows.length, mode: soRows[0]?.mode || "classic" };
-    const byProduct = {};
-    soRows.forEach(r => {
-      s.grocery += r.grocery;
-      s.gudang += r.gudang;
-      s.system += r.system;
-      const k = r.produk.toUpperCase();
-      const cur = byProduct[k];
-      // Petugas: dari sheet kalau ada, kalau tidak dari mapping gondola
-      let ptg = (r.petugas || "").trim();
-      if (!ptg && r.gondola) {
-        const g = parseInt(r.gondola, 10);
-        if (!isNaN(g)) {
-          for (const [a, b, n] of SO_PETUGAS_GONDOLA) {
-            if (g >= a && g <= b) { ptg = n; break; }
-          }
-        }
-      }
-      if (cur) {
-        cur.grocery += r.grocery; cur.gudang += r.gudang; cur.system += r.system;
-        if (r.expired && (!cur.expired || r.expired < cur.expired)) cur.expired = r.expired; // terdekat
-        if (ptg && !cur.petugas) cur.petugas = ptg;
-        if (r.gondola && !cur.gondola) cur.gondola = r.gondola;
-      } else {
-        byProduct[k] = { produk: r.produk, grocery: r.grocery, gudang: r.gudang, system: r.system, expired: r.expired || "", petugas: ptg, gondola: r.gondola || "" };
-      }
-    });
-    const fisik = s.grocery + s.gudang;
-    s.fisik = fisik;
-    s.selisih = fisik - s.system;
-    s.list = Object.values(byProduct).map(p => ({ ...p, fisik: p.grocery + p.gudang, selisih: (p.grocery + p.gudang) - p.system }))
-      .sort((a, b) => Math.abs(b.selisih) - Math.abs(a.selisih));
-    return s;
-  }, [soRows]);
-
-  // ---- Route detail SO (hash #/so/<produk>) ----
-  const openSoDetail = (produk) => {
-    setSoDetail(produk);
-    try { history.replaceState(null, "", "#/so/" + encodeURIComponent(produk)); } catch (e) {}
-  };
-  const closeSoDetail = () => {
-    setSoDetail(null);
-    try { history.replaceState(null, "", "#"); } catch (e) {}
-  };
-  const goSoItems = () => {
-    setSoPage("items");
-    try { history.replaceState(null, "", "#/so-items"); } catch (e) {}
-  };
-  const goSoInput = () => {
-    setSoPage("input");
-    try { history.replaceState(null, "", "#/so-input"); } catch (e) {}
-  };
-  const closeSoPage = () => {
-    setSoPage(null);
-    try { history.replaceState(null, "", "#"); } catch (e) {}
-  };
-  useEffect(() => {
-    const onHash = () => {
-      const m = window.location.hash.match(/^#\/so\/(.+)$/);
-      if (m) { try { setSoDetail(decodeURIComponent(m[1])); setSoPage(null); } catch (e) {} }
-      else if (window.location.hash.startsWith("#/so-items")) { setSoDetail(null); setSoPage("items"); }
-      else if (window.location.hash.startsWith("#/so-input")) { setSoDetail(null); setSoPage("input"); }
-    };
-    window.addEventListener("hashchange", onHash);
-    onHash(); // baca hash awal (mis. buka langsung dari URL)
-    return () => window.removeEventListener("hashchange", onHash);
-  }, []);
-  // Produk detail yang sedang dibuka (dari soStats.list)
-  const soDetailItem = useMemo(() => {
-    if (!soDetail) return null;
-    return soStats.list.find(p => p.produk === soDetail) || null;
-  }, [soDetail, soStats]);
 
   const months = useMemo(() => [...new Set(rows.map(r => toMonthKey(r.date)))].sort().reverse(), [rows]);
 
@@ -292,9 +193,7 @@ export default function Dashboard({ onLock, theme, onToggleTheme, weather, weath
           </button>
           <Button variant="outline" size="sm" disabled={loading} onClick={() => load(false)}>{loading ? "Memuat…" : "⟳ Refresh"}</Button>
           <Button variant="outline" size="sm" onClick={exportPDF}>🖨️ Laporan PDF</Button>
-          <Button variant="outline" size="sm" id="themeBtn" onClick={onToggleTheme} disabled={weatherEnabled && !!weather} title={weatherEnabled && weather ? "Terang/Gelap otomatis ikut cuaca — matikan Auto Cuaca untuk ganti manual" : "Ganti tema terang/gelap"}>
-            {weatherEnabled && weather ? "🌦️ Auto" : theme === "dark" ? "☀️ Terang" : "🌙 Gelap"}
-          </Button>
+          <Button variant="outline" size="sm" onClick={onOpenSo} title="Lihat SO Stok Opname">📦 SO</Button>
           <Button variant="destructive" size="sm" onClick={onLock}>🔒 Kunci</Button>
         </div>
       </div>
@@ -354,189 +253,12 @@ export default function Dashboard({ onLock, theme, onToggleTheme, weather, weath
         transition={{ delay: 0.25, duration: 0.55, ease: "easeOut" }}
       >
         <Card className="scard">
-          <CardHeader>
-            <CardTitle className="scard-title">
-              <span className="dot" /> SO — Stok Opname
-              {SO_SHEET_ID && (
-                <Badge variant={soStatus.kind === "ok" ? "default" : "destructive"} className="chip-badge">{soStatus.txt}</Badge>
-              )}
-              {SO_SHEET_ID && (
-                <span className="so-nav-btns">
-                  <button className="so-nav-btn" onClick={goSoItems} title="Lihat detail semua item SO">📋 Detail Item</button>
-                  <button className="so-nav-btn" onClick={goSoInput} title="Input stok opname per petugas">✏️ Input SO</button>
-                </span>
-              )}
-            </CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle className="scard-title"><span className="dot" /> SO — Stok Opname</CardTitle></CardHeader>
           <CardContent>
-            {soPage === "items" ? (
-              <SoItemsPage onBack={closeSoPage} soRows={soRows} />
-            ) : soPage === "input" ? (
-              <SoInputPage onBack={closeSoPage} soRows={soRows} />
-            ) : !SO_SHEET_ID ? (
-              <div className="empty-state so-empty">
-                📋 <b>Panel SO (Stok Opname) siap.</b><br />
-                Data stok diambil dari Google Form/Sheet SO.<br />
-                <span className="so-hint">Setelah kamu kasih link/ID sheet SO, isi <code>SO_SHEET_ID</code> di <code>src/config.js</code> dan panel ini otomatis aktif.</span>
-              </div>
-            ) : !soRows.length ? (
-              <div className="empty-state">Belum ada data stok opname</div>
-            ) : (
-              <>
-                <div className="so-kpis">
-                  <div className="so-kpi">
-                    <div className="lbl">{soStats.mode === "gondola" ? "📦 Total Qty Fisik" : "🏪 Stock Grocery"}</div>
-                    <div className="val">{soStats.grocery}</div>
-                    <div className="sub">{soStats.mode === "gondola" ? "stok fisik dari sheet gondola" : "stok toko/etalase"}</div>
-                  </div>
-                  {soStats.mode === "gondola" ? (
-                    <>
-                      <div className="so-kpi">
-                        <div className="lbl">🏬 Entri Gondola</div>
-                        <div className="val">{soStats.items}</div>
-                        <div className="sub">baris produk terisi</div>
-                      </div>
-                      <div className="so-kpi">
-                        <div className="lbl">🧑‍🌾 Petugas</div>
-                        <div className="val">{new Set(soStats.list.map(p => p.petugas).filter(Boolean)).size}</div>
-                        <div className="sub">penanggung jawab gondola</div>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="so-kpi">
-                        <div className="lbl">📦 Stock Gudang</div>
-                        <div className="val">{soStats.gudang}</div>
-                        <div className="sub">stok gudang</div>
-                      </div>
-                      <div className="so-kpi">
-                        <div className="lbl">🖥️ Stock On System</div>
-                        <div className="val">{soStats.system}</div>
-                        <div className="sub">stok di sistem</div>
-                      </div>
-                    </>
-                  )}
-                  <div className={"so-kpi" + (soStats.mode === "gondola" ? "" : soStats.selisih === 0 ? "" : " so-mismatch")}>
-                    <div className="lbl">{soStats.mode === "gondola" ? "⚡ Barang Terisi" : "⚖️ Selisih (Fisik − System)"}</div>
-                    <div className="val">{soStats.mode === "gondola" ? soStats.list.length : (soStats.selisih > 0 ? "+" : "") + soStats.selisih}</div>
-                    <div className="sub">{soStats.mode === "gondola" ? "produk unik" : "fisik " + soStats.fisik + " · " + soStats.items + " entri"}</div>
-                  </div>
-                </div>
-                <div className="so-table-wrap">
-                  <table className="so-table">
-                    <thead>
-                      <tr>
-                        <th>Produk</th>
-                        <th>Petugas</th>
-                        <th className="num">Gondola</th>
-                        <th className="num">{soStats.mode === "gondola" ? "Qty Fisik" : "Grocery"}</th>
-                        {soStats.mode !== "gondola" && <th className="num">Gudang</th>}
-                        {soStats.mode !== "gondola" && <th className="num">Fisik</th>}
-                        <th className="num">{soStats.mode === "gondola" ? "Satuan" : "System"}</th>
-                        <th className="num">Expired</th>
-                        {soStats.mode !== "gondola" && <th className="num">Selisih</th>}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {soStats.list.map((p, i) => (
-                        <tr key={i} className={p.selisih === 0 ? "" : "so-row-mismatch"}>
-                          <td>
-                            <button className="so-prod-link" onClick={() => openSoDetail(p.produk)} title={"Buka detail " + p.produk}>
-                              {p.produk} →
-                            </button>
-                          </td>
-                          <td className="so-petugas">{p.petugas || "—"}</td>
-                          <td className="num">{p.gondola || "—"}</td>
-                          <td className="num">{p.grocery}</td>
-                          {soStats.mode !== "gondola" && <td className="num">{p.gudang}</td>}
-                          {soStats.mode !== "gondola" && <td className="num">{p.fisik}</td>}
-                          <td className="num">{soStats.mode === "gondola" ? (p.satuan || "—") : p.system}</td>
-                          <td className={"num so-exp" + (isExpiredSoon(p.expired) ? " so-exp-warn" : "")}>
-                            {p.expired ? fmtExpired(p.expired) : "—"}
-                          </td>
-                          {soStats.mode !== "gondola" && (
-                            <td className={"num so-sel" + (p.selisih > 0 ? " so-pos" : p.selisih < 0 ? " so-neg" : "")}>
-                              {p.selisih > 0 ? "+" : ""}{p.selisih}
-                            </td>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {soDetailItem && (
-                  <div className="so-detail">
-                    <div className="so-detail-head">
-                      <div>
-                        <div className="so-detail-kicker">Detail SO</div>
-                        <div className="so-detail-title">📦 {soDetailItem.produk}</div>
-                      </div>
-                      <button className="so-back" onClick={closeSoDetail}>← Kembali ke SO</button>
-                    </div>
-                    <div className="so-detail-grid">
-                      <div className="so-detail-card">
-                        <div className="lbl">{soStats.mode === "gondola" ? "📦 Qty Fisik" : "🏪 Stock Grocery"}</div>
-                        <div className="val">{soDetailItem.grocery}</div>
-                        <div className="sub">{soStats.mode === "gondola" ? "stok fisik" : "stok toko/etalase"}</div>
-                      </div>
-                      {soStats.mode === "gondola" ? (
-                        <>
-                          <div className="so-detail-card">
-                            <div className="lbl">🏬 Gondola</div>
-                            <div className="val">{soDetailItem.gondola || "—"}</div>
-                            <div className="sub">lokasi rak</div>
-                          </div>
-                          <div className="so-detail-card">
-                            <div className="lbl">📏 Satuan</div>
-                            <div className="val">{soDetailItem.satuan || "—"}</div>
-                            <div className="sub">unit</div>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="so-detail-card">
-                            <div className="lbl">📦 Stock Gudang</div>
-                            <div className="val">{soDetailItem.gudang}</div>
-                            <div className="sub">stok gudang</div>
-                          </div>
-                          <div className="so-detail-card">
-                            <div className="lbl">🖥️ Stock On System</div>
-                            <div className="val">{soDetailItem.system}</div>
-                            <div className="sub">stok di sistem</div>
-                          </div>
-                          <div className={"so-detail-card" + (soDetailItem.selisih === 0 ? "" : " so-mismatch")}>
-                            <div className="lbl">⚖️ Selisih</div>
-                            <div className="val">{soDetailItem.selisih > 0 ? "+" : ""}{soDetailItem.selisih}</div>
-                            <div className="sub">fisik {soDetailItem.fisik} − system</div>
-                          </div>
-                        </>
-                      )}
-                      <div className={"so-detail-card" + (isExpiredSoon(soDetailItem.expired) ? " so-exp-warn" : "")}>
-                        <div className="lbl">📅 Expired</div>
-                        <div className="val">{soDetailItem.expired ? fmtExpired(soDetailItem.expired) : "—"}</div>
-                        <div className="sub">{soDetailItem.expired ? (isExpiredSoon(soDetailItem.expired) ? "⚠️ dekat kadaluarsa / lewat" : "masih aman") : "tidak diisi"}</div>
-                      </div>
-                      <div className="so-detail-card">
-                        <div className="lbl">🧑‍🌾 Petugas</div>
-                        <div className="val so-petugas-val">{soDetailItem.petugas || "—"}</div>
-                        <div className="sub">{soStats.mode === "gondola" ? "penanggung jawab gondola" : "petugas"}</div>
-                      </div>
-                    </div>
-                    <div className="so-detail-note">
-                      {soStats.mode === "gondola"
-                        ? (soDetailItem.expired && isExpiredSoon(soDetailItem.expired)
-                            ? "⚠️ Perhatian: expired dekat / sudah lewat — segera cek fisik barang."
-                            : "✅ Catatan stok gondola: qty fisik + expired terpantau.")
-                        : (soDetailItem.selisih === 0
-                            ? "✅ Stok fisik sesuai sistem — tidak ada selisih."
-                            : soDetailItem.selisih > 0
-                              ? "⚠️ Stok fisik LEBIH BANYAK dari sistem (+" + soDetailItem.selisih + "). Periksa kemungkinan barang belum di-input / salah catat."
-                              : "⚠️ Stok fisik KURANG dari sistem (" + soDetailItem.selisih + "). Periksa kemungkinan barang hilang / salah input / belum dicatat.")}
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
+            <div className="so-quick">
+              <p className="so-quick-txt">📦 Data stok opname (grocery / gudang / on system, expired, petugas per gondola).</p>
+              <Button variant="outline" size="sm" onClick={onOpenSo}>📦 Buka SO →</Button>
+            </div>
           </CardContent>
         </Card>
       </motion.div>
@@ -678,26 +400,6 @@ export default function Dashboard({ onLock, theme, onToggleTheme, weather, weath
 
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-}
-
-/* Format tanggal expired "YYYY-MM-DD" -> "dd/mm/yyyy" (atau apa adanya) */
-function fmtExpired(v) {
-  if (!v) return "";
-  const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (m) return m[3] + "/" + m[2] + "/" + m[1];
-  return String(v);
-}
-
-/* Apakah expired dalam <= 30 hari ke depan (atau sudah lewat) */
-function isExpiredSoon(v) {
-  if (!v) return false;
-  const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!m) return false;
-  const t = new Date(+m[1], +m[2] - 1, +m[3]).getTime();
-  if (isNaN(t)) return false;
-  const now = Date.now();
-  const day = 86400000;
-  return t < now + 30 * day; // sudah lewat atau dalam 30 hari
 }
 
 /* Animasi angka count-up ala SpaceX telemetry */
