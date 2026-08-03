@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { CONFIG, PER_PAGE } from '../config';
-import { fetchSheet, dummyRows } from '../lib/sheet';
+import { CONFIG, PER_PAGE, SO_SHEET_ID } from '../config';
+import { fetchSheet, fetchSoSheet, dummyRows } from '../lib/sheet';
 import { fmtRp, fmtDate, toMonthKey, monthLabel, pad2, isToday, nowLabel } from '../lib/utils';
 import { TOD_META } from '../lib/daytime';
 import { Button } from './ui/button';
@@ -11,6 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 
 export default function Dashboard({ onLock, theme, onToggleTheme, weather, weatherEnabled, onToggleWeather, tod }) {
   const [rows, setRows] = useState([]);      // semua
+  const [soRows, setSoRows] = useState([]);  // stok opname
+  const [soStatus, setSoStatus] = useState({ kind: "ok", txt: "● SO" });
   // Default filter: bulan SAAT INI (bulan berjalan)
   const [month, setMonth] = useState(() => toMonthKey(new Date()));
   const [dStart, setDStart] = useState("");
@@ -67,6 +69,48 @@ export default function Dashboard({ onLock, theme, onToggleTheme, weather, weath
     const t = setInterval(() => load(true), CONFIG.REFRESH_MINUTES * 60 * 1000);
     return () => clearInterval(t);
   }, []);
+
+  // ---- SO (Stok Opname) ----
+  const loadSo = async () => {
+    if (!SO_SHEET_ID) { setSoRows([]); return; }
+    try {
+      const raw = await fetchSoSheet();
+      setSoRows(raw);
+      setSoStatus({ kind: "ok", txt: "● SO" });
+    } catch (err) {
+      console.error(err);
+      setSoStatus({ kind: "err", txt: "● SO gagal" });
+    }
+  };
+  useEffect(() => { loadSo(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => {
+    const t = setInterval(() => loadSo(), CONFIG.REFRESH_MINUTES * 60 * 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Ringkasan SO: total per lokasi + selisih
+  const soStats = useMemo(() => {
+    const s = { grocery: 0, gudang: 0, system: 0, items: soRows.length };
+    const byProduct = {};
+    soRows.forEach(r => {
+      s.grocery += r.grocery;
+      s.gudang += r.gudang;
+      s.system += r.system;
+      const k = r.produk.toUpperCase();
+      const cur = byProduct[k];
+      if (cur) {
+        cur.grocery += r.grocery; cur.gudang += r.gudang; cur.system += r.system;
+      } else {
+        byProduct[k] = { produk: r.produk, grocery: r.grocery, gudang: r.gudang, system: r.system };
+      }
+    });
+    const fisik = s.grocery + s.gudang;
+    s.fisik = fisik;
+    s.selisih = fisik - s.system;
+    s.list = Object.values(byProduct).map(p => ({ ...p, fisik: p.grocery + p.gudang, selisih: (p.grocery + p.gudang) - p.system }))
+      .sort((a, b) => Math.abs(b.selisih) - Math.abs(a.selisih));
+    return s;
+  }, [soRows]);
 
   const months = useMemo(() => [...new Set(rows.map(r => toMonthKey(r.date)))].sort().reverse(), [rows]);
 
@@ -247,6 +291,88 @@ export default function Dashboard({ onLock, theme, onToggleTheme, weather, weath
           </motion.div>
         ))}
       </div>
+
+      <motion.div
+        className="card"
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.25, duration: 0.55, ease: "easeOut" }}
+      >
+        <Card className="scard">
+          <CardHeader>
+            <CardTitle className="scard-title">
+              <span className="dot" /> SO — Stok Opname
+              {SO_SHEET_ID && (
+                <Badge variant={soStatus.kind === "ok" ? "default" : "destructive"} className="chip-badge">{soStatus.txt}</Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!SO_SHEET_ID ? (
+              <div className="empty-state so-empty">
+                📋 <b>Panel SO (Stok Opname) siap.</b><br />
+                Data stok diambil dari Google Form/Sheet SO.<br />
+                <span className="so-hint">Setelah kamu kasih link/ID sheet SO, isi <code>SO_SHEET_ID</code> di <code>src/config.js</code> dan panel ini otomatis aktif.</span>
+              </div>
+            ) : !soRows.length ? (
+              <div className="empty-state">Belum ada data stok opname</div>
+            ) : (
+              <>
+                <div className="so-kpis">
+                  <div className="so-kpi">
+                    <div className="lbl">🏪 Stock Grocery</div>
+                    <div className="val">{soStats.grocery}</div>
+                    <div className="sub">stok toko/etalase</div>
+                  </div>
+                  <div className="so-kpi">
+                    <div className="lbl">📦 Stock Gudang</div>
+                    <div className="val">{soStats.gudang}</div>
+                    <div className="sub">stok gudang</div>
+                  </div>
+                  <div className="so-kpi">
+                    <div className="lbl">🖥️ Stock On System</div>
+                    <div className="val">{soStats.system}</div>
+                    <div className="sub">stok di sistem</div>
+                  </div>
+                  <div className={"so-kpi" + (soStats.selisih === 0 ? "" : " so-mismatch")}>
+                    <div className="lbl">⚖️ Selisih (Fisik − System)</div>
+                    <div className="val">{soStats.selisih > 0 ? "+" : ""}{soStats.selisih}</div>
+                    <div className="sub">fisik {soStats.fisik} · {soStats.items} entri</div>
+                  </div>
+                </div>
+                <div className="so-table-wrap">
+                  <table className="so-table">
+                    <thead>
+                      <tr>
+                        <th>Produk</th>
+                        <th className="num">Grocery</th>
+                        <th className="num">Gudang</th>
+                        <th className="num">Fisik</th>
+                        <th className="num">System</th>
+                        <th className="num">Selisih</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {soStats.list.map((p, i) => (
+                        <tr key={i} className={p.selisih === 0 ? "" : "so-row-mismatch"}>
+                          <td>{p.produk}</td>
+                          <td className="num">{p.grocery}</td>
+                          <td className="num">{p.gudang}</td>
+                          <td className="num">{p.fisik}</td>
+                          <td className="num">{p.system}</td>
+                          <td className={"num so-sel" + (p.selisih > 0 ? " so-pos" : p.selisih < 0 ? " so-neg" : "")}>
+                            {p.selisih > 0 ? "+" : ""}{p.selisih}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
 
       <motion.div
               className="card"

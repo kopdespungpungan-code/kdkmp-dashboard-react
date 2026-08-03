@@ -1,15 +1,19 @@
-import { SHEET_URL } from '../config';
+import { SHEET_URL, SO_SHEET_URL } from '../config';
 import { parseDate, toKey, parseNum } from './utils';
 
-export async function fetchSheet() {
-  const res = await fetch(SHEET_URL, { cache: "no-store" });
+async function fetchGviz(url) {
+  const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) throw new Error("HTTP " + res.status);
   let txt = await res.text();
   const i = txt.indexOf("{"), j = txt.lastIndexOf("}");
   if (i < 0 || j < 0) throw new Error("Format data tidak dikenali");
   const data = JSON.parse(txt.slice(i, j + 1));
   if (data.status !== "ok") throw new Error(data.errors ? data.errors[0].detailed_message : "Status " + data.status);
-  const rows = (data.table && data.table.rows) || [];
+  return (data.table && data.table.rows) || [];
+}
+
+export async function fetchSheet() {
+  const rows = await fetchGviz(SHEET_URL);
   const out = [];
   for (const r of rows) {
     const c = r.c || [];
@@ -23,6 +27,46 @@ export async function fetchSheet() {
     out.push({ date: tgl, key: toKey(tgl), omset, gross, petugas, struk });
   }
   out.sort((a, b) => a.date - b.date);
+  return out;
+}
+
+/**
+ * Baca spreadsheet SO (Stok Opname).
+ * Kolom dideteksi dari baris header: "produk/nama", "grocery", "gudang", "on system/sistem".
+ * Baris dengan produk kosong di-skip. Mengembalikan array { produk, grocery, gudang, system }.
+ */
+export async function fetchSoSheet() {
+  if (!SO_SHEET_URL) return [];
+  const rows = await fetchGviz(SO_SHEET_URL);
+  const out = [];
+  if (!rows.length) return out;
+
+  // Header di baris pertama (respons form) — cari nama kolom
+  const header = (rows[0].c || []).map(h => String((h && h.v) || "").toLowerCase().replace(/[^a-z0-9]/g, ""));
+  const idx = (keys) => header.findIndex(h => keys.some(k => h.includes(k)));
+  const iProduk = idx(["produk", "nama", "barang", "item"]);
+  const iGrocery = idx(["grocery", "etalase", "toko"]);
+  const iGudang = idx(["gudang", "warehouse"]);
+  const iSystem = idx(["onsystem", "sistem", "system", "on"]);
+  if (iProduk < 0 || (iGrocery < 0 && iGudang < 0 && iSystem < 0)) {
+    // header tidak dikenal — fallback: urutan umum (tanggal, produk, grocery, gudang, system)
+    const guess = (k) => k < (rows[0].c || []).length ? (rows[0].c[k] || {}).v : null;
+    void guess;
+    return out;
+  }
+
+  for (const r of rows) {
+    const c = r.c || [];
+    const get = (k) => (k >= 0 && c[k] && c[k].v !== undefined && c[k].v !== null) ? c[k].v : null;
+    const produk = String(get(iProduk) || "").trim();
+    if (!produk) continue;
+    out.push({
+      produk,
+      grocery: parseNum(get(iGrocery)),
+      gudang: parseNum(get(iGudang)),
+      system: parseNum(get(iSystem)),
+    });
+  }
   return out;
 }
 
