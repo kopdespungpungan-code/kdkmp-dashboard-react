@@ -125,7 +125,7 @@ export default function PinGate({ onUnlock }) {
 
       <motion.img
         className="pin-logo"
-        src="/assets/logo-kopdes.jpg"
+        src="assets/logo-kopdes.jpg"
         alt="Logo KDKMP Pungpungan"
         initial={{ opacity: 0, scale: 0.85 }}
         animate={{ opacity: 1, scale: 1 }}

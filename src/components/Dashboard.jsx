@@ -161,7 +161,7 @@ export default function Dashboard({ onLock, weather, weatherEnabled, onToggleWea
     <div id="dash" className="wrap">
       <div className="top">
         <div className="brand">
-          <img className="brand-logo" src="/assets/logo-kopdes.jpg" alt="Logo KDKMP Pungpungan" />
+          <img className="brand-logo" src="assets/logo-kopdes.jpg" alt="Logo KDKMP Pungpungan" />
           <div>
             <h1>Dashboard Penjualan KDKMP PUNGPUNGAN</h1>
             <span className="badge">Realtime</span>

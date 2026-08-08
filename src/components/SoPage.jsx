@@ -85,7 +85,7 @@ export default function SoPage({ soRows, soStatus, onBackHome, onItems, onInput 
     <div className="wrap">
       <div className="top">
         <div className="brand">
-          <img className="brand-logo" src="/assets/logo-kopdes.jpg" alt="Logo KDKMP Pungpungan" />
+          <img className="brand-logo" src="assets/logo-kopdes.jpg" alt="Logo KDKMP Pungpungan" />
           <div>
             <h1>SO — Stok Opname</h1>
             <span className="badge">Realtime</span>
