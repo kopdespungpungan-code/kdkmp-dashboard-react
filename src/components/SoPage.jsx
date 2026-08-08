@@ -9,6 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
    Tombol ke #/so-items (detail semua item) & #/so-input (input per petugas). */
 export default function SoPage({ soRows, soStatus, onBackHome, onItems, onInput }) {
   const [soDetail, setSoDetail] = useState(null);
+  const [filterPetugas, setFilterPetugas] = useState("all");
+  const [filterGondola, setFilterGondola] = useState("all");
+  const [search, setSearch] = useState("");
 
   // Ringkasan SO: total per lokasi + selisih + expired + petugas
   const soStats = useMemo(() => {
@@ -51,6 +54,29 @@ export default function SoPage({ soRows, soStatus, onBackHome, onItems, onInput 
     if (!soDetail) return null;
     return soStats.list.find(p => p.produk === soDetail) || null;
   }, [soDetail, soStats]);
+
+  // Daftar petugas & gondola untuk filter
+  const petugasList = useMemo(() => {
+    const s = new Set(soStats.list.map(p => p.petugas).filter(Boolean));
+    return [...s].sort();
+  }, [soStats]);
+
+  const gondolaList = useMemo(() => {
+    const s = new Set(soStats.list.map(p => p.gondola).filter(g => g !== "" && g !== undefined));
+    return [...s].sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+  }, [soStats]);
+
+  // Filter + search
+  const filteredList = useMemo(() => {
+    let out = soStats.list.slice();
+    if (filterPetugas !== "all") out = out.filter(p => p.petugas === filterPetugas);
+    if (filterGondola !== "all") out = out.filter(p => String(p.gondola) === filterGondola);
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      out = out.filter(p => p.produk.toLowerCase().includes(q));
+    }
+    return out;
+  }, [soStats, filterPetugas, filterGondola, search]);
 
   const openSoDetail = (produk) => setSoDetail(produk);
   const closeSoDetail = () => setSoDetail(null);
@@ -133,47 +159,53 @@ export default function SoPage({ soRows, soStatus, onBackHome, onItems, onInput 
                     <div className="sub">{soStats.mode === "gondola" ? "produk unik" : "fisik " + soStats.fisik + " · " + soStats.items + " entri"}</div>
                   </div>
                 </div>
-                <div className="so-table-wrap">
-                  <table className="so-table">
-                    <thead>
-                      <tr>
-                        <th>Produk</th>
-                        <th>Petugas</th>
-                        <th className="num">Gondola</th>
-                        <th className="num">{soStats.mode === "gondola" ? "Qty Fisik" : "Grocery"}</th>
-                        {soStats.mode !== "gondola" && <th className="num">Gudang</th>}
-                        {soStats.mode !== "gondola" && <th className="num">Fisik</th>}
-                        <th className="num">{soStats.mode === "gondola" ? "Satuan" : "System"}</th>
-                        <th className="num">Expired</th>
-                        {soStats.mode !== "gondola" && <th className="num">Selisih</th>}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {soStats.list.map((p, i) => (
-                        <tr key={i} className={p.selisih === 0 ? "" : "so-row-mismatch"}>
-                          <td>
-                            <button className="so-prod-link" onClick={() => openSoDetail(p.produk)} title={"Buka detail " + p.produk}>
-                              {p.produk} →
-                            </button>
-                          </td>
-                          <td className="so-petugas">{p.petugas || "—"}</td>
-                          <td className="num">{p.gondola || "—"}</td>
-                          <td className="num">{p.grocery}</td>
-                          {soStats.mode !== "gondola" && <td className="num">{p.gudang}</td>}
-                          {soStats.mode !== "gondola" && <td className="num">{p.fisik}</td>}
-                          <td className="num">{soStats.mode === "gondola" ? (p.satuan || "—") : p.system}</td>
-                          <td className={"num so-exp" + (isExpiredSoon(p.expired) ? " so-exp-warn" : "")}>
-                            {p.expired ? fmtExpired(p.expired) : "—"}
-                          </td>
-                          {soStats.mode !== "gondola" && (
-                            <td className={"num so-sel" + (p.selisih > 0 ? " so-pos" : p.selisih < 0 ? " so-neg" : "")}>
-                              {p.selisih > 0 ? "+" : ""}{p.selisih}
-                            </td>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                {/* Filter + search */}
+                <div className="so-page-filters">
+                  <select className="so-select" value={filterPetugas} onChange={e => { setFilterPetugas(e.target.value); setSoDetail(null); }}>
+                    <option value="all">👤 Semua Petugas</option>
+                    {petugasList.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                  <select className="so-select" value={filterGondola} onChange={e => { setFilterGondola(e.target.value); setSoDetail(null); }}>
+                    <option value="all">🏬 Semua Gondola</option>
+                    {gondolaList.map(g => <option key={g} value={g}>Gondola {g}</option>)}
+                  </select>
+                  <input className="so-search" placeholder="🔍 cari produk…" value={search} onChange={e => setSearch(e.target.value)} />
+                  {(filterPetugas !== "all" || filterGondola !== "all" || search) && (
+                    <button className="so-filter-reset" onClick={() => { setFilterPetugas("all"); setFilterGondola("all"); setSearch(""); }}>
+                      ✕ Reset
+                    </button>
+                  )}
+                </div>
+                <div className="so-result-info">Menampilkan <b>{filteredList.length}</b> dari {soStats.list.length} produk</div>
+
+                {/* Card grid (mobile-first) */}
+                <div className="so-cards">
+                  {!filteredList.length ? (
+                    <div className="so-empty-row">Tidak ada produk cocok dengan filter</div>
+                  ) : filteredList.map((p, i) => (
+                    <div className={"so-card" + (isExpiredSoon(p.expired) ? " so-card-warn" : "")} key={i} onClick={() => openSoDetail(p.produk)}>
+                      <div className="so-card-head">
+                        <div className="so-card-produk">{p.produk}</div>
+                        <span className="so-card-qty">{p.grocery}</span>
+                      </div>
+                      <div className="so-card-meta">
+                        {p.petugas && <span className="so-card-chip">👤 {p.petugas}</span>}
+                        {p.gondola && <span className="so-card-chip">🏬 G.{p.gondola}</span>}
+                        {soStats.mode === "gondola" && p.satuan && <span className="so-card-chip">📏 {p.satuan}</span>}
+                      </div>
+                      <div className="so-card-foot">
+                        <span className={"so-card-exp" + (isExpiredSoon(p.expired) ? " so-exp-warn" : "")}>
+                          {p.expired ? "⏳ " + fmtExpired(p.expired) : "⏳ —"}
+                        </span>
+                        {soStats.mode !== "gondola" && (
+                          <span className={"so-card-sel" + (p.selisih > 0 ? " so-pos" : p.selisih < 0 ? " so-neg" : "")}>
+                            {p.selisih > 0 ? "+" : ""}{p.selisih}
+                          </span>
+                        )}
+                        <span className="so-card-open">Detail →</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
                 {soDetailItem && (
                   <div className="so-detail">
