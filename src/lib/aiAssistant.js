@@ -56,7 +56,18 @@ KEUANGAN: Total omset Rp${keu.totalOmset.toLocaleString('id-ID')} (${keu.days} h
 export async function askBestGrafityAI(query, soRows = [], salesRows = []) {
   const context = buildContext(soRows, salesRows);
   try {
-    const res = await fetch("http://localhost:20128/v1/chat/completions", {
+    // Coba ke proxy lokal atau custom API endpoint jika dikonfigurasi, jika tidak langsung gunakan fallback pintar
+    const endpoint = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+      ? "http://localhost:20128/v1/chat/completions"
+      : null;
+
+    if (!endpoint) {
+      // Pada GitHub Pages (HTTPS), panggilan ke http://localhost diproteksi CORS/Mixed Content, 
+      // jadi kita langsung gunakan Engine Fallback cerdas berbasis data riil toko.
+      return fallbackNaturalAnswer(query, soRows, salesRows);
+    }
+
+    const res = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
