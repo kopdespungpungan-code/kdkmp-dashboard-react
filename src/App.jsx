@@ -5,13 +5,14 @@ import Dashboard from './components/Dashboard';
 import SoPage from './components/SoPage';
 import SoItemsPage from './components/SoItemsPage';
 import SoInputPage from './components/SoInputPage';
+import AiChatFloat from './components/AiChatFloat';
 import Starfield from './components/Starfield';
 import SkyClouds from './components/SkyClouds';
 import WeatherFX from './components/WeatherFX';
 import { applyTheme } from './lib/theme';
 import { themeForCond } from './lib/weather';
 import { timeOfDay, isNightTod } from './lib/daytime';
-import { fetchSoSheet } from './lib/sheet';
+import { fetchSoSheet, fetchSheet } from './lib/sheet';
 import { CONFIG } from './config';
 
 // Route hash: #/ (beranda/rekap), #/so (SO), #/so-items (detail item), #/so-input (input per petugas)
@@ -31,6 +32,7 @@ export default function App() {
   const [tod, setTod] = useState(() => timeOfDay());
   const [soRows, setSoRows] = useState([]);
   const [soStatus, setSoStatus] = useState({ kind: "ok", txt: "● SO" });
+  const [salesRows, setSalesRows] = useState([]);
 
   useEffect(() => {
     let ok = false;
@@ -87,6 +89,21 @@ export default function App() {
     return () => clearInterval(t);
   }, []);
 
+  // Data keuangan (penjualan) untuk AI chat — fetch ringan, refresh 5 menit
+  const loadSales = async () => {
+    try {
+      const raw = await fetchSheet();
+      setSalesRows(raw);
+    } catch (err) {
+      console.error("sales fetch error:", err);
+    }
+  };
+  useEffect(() => { loadSales(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => {
+    const t = setInterval(() => loadSales(), CONFIG.REFRESH_MINUTES * 60 * 1000);
+    return () => clearInterval(t);
+  }, []);
+
   const unlock = () => setUnlocked(true);
   const lock = () => {
     try { sessionStorage.removeItem("kdkmp_pin_ok"); } catch (e) {}
@@ -114,6 +131,7 @@ export default function App() {
         onToggleWeather={() => setWeatherEnabled(v => !v)}
         tod={tod}
         onOpenSo={() => navigate("so")}
+        soRows={soRows}
       />
     )
   ) : null;
@@ -124,6 +142,7 @@ export default function App() {
       <WeatherFX onWeather={setWeather} enabled={weatherEnabled} />
       {theme === 'dark' ? <Starfield /> : <SkyClouds />}
       <div className="space-vignette" aria-hidden="true" />
+      {unlocked && <AiChatFloat soRows={soRows} salesRows={salesRows} />}
       <AnimatePresence mode="wait">
         {unlocked ? (
           <motion.div

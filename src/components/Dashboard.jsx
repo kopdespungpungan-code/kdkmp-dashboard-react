@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 
-export default function Dashboard({ onLock, weather, weatherEnabled, onToggleWeather, tod, onOpenSo }) {
+export default function Dashboard({ onLock, weather, weatherEnabled, onToggleWeather, tod, onOpenSo, soRows = [] }) {
   const [rows, setRows] = useState([]);      // semua
   // Default filter: bulan SAAT INI (bulan berjalan)
   const [month, setMonth] = useState(() => toMonthKey(new Date()));
