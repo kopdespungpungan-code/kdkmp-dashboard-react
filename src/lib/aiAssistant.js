@@ -57,9 +57,14 @@ export async function askBestGrafityAI(query, soRows = [], salesRows = []) {
   const context = buildContext(soRows, salesRows);
   try {
     // Coba ke proxy lokal atau custom API endpoint jika dikonfigurasi, jika tidak langsung gunakan fallback pintar
-    const endpoint = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-      ? "http://localhost:20128/v1/chat/completions"
-      : null;
+    const isLocal = window.location.hostname === "localhost" || 
+                    window.location.hostname === "127.0.0.1" || 
+                    window.location.hostname.startsWith("192.168.") || 
+                    window.location.hostname.startsWith("172.") || 
+                    window.location.hostname.startsWith("100.");
+
+    const apiHost = window.location.hostname;
+    const endpoint = isLocal ? `http://${apiHost}:20128/v1/chat/completions` : null;
 
     if (!endpoint) {
       // Pada GitHub Pages (HTTPS), panggilan ke http://localhost diproteksi CORS/Mixed Content, 
