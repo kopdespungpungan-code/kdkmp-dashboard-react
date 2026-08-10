@@ -92,7 +92,8 @@ export function buildAiMessages(query, soRows = [], salesRows = [], history = []
 }
 
 export async function askBestGrafityAI(query, soRows = [], salesRows = [], history = []) {
-  const response = await fetch('/api/ai', {
+  const configuredUrl = typeof import.meta.env === 'object' ? import.meta.env.VITE_AI_API_URL : '';
+  const response = await fetch(configuredUrl || '/api/ai', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-KDKMP-AI': '1' },
     body: JSON.stringify({ messages: buildAiMessages(query, soRows, salesRows, history) }),

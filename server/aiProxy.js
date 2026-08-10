@@ -4,6 +4,7 @@ import path from 'node:path';
 
 const DEFAULT_UPSTREAM = 'http://localhost:20128/v1/chat/completions';
 const MAX_BODY_BYTES = 256 * 1024;
+const DEFAULT_PUBLIC_ORIGINS = ['https://kopdespungpungan-code.github.io'];
 const requestBuckets = new Map();
 
 export function extractAssistantText(body, contentType = '') {
@@ -80,14 +81,27 @@ export function validateMessages(messages) {
   return messages;
 }
 
-function sameOriginRequest(req) {
-  const origin = req.headers.origin;
+export function isAllowedOrigin(origin, host) {
   if (!origin) return true;
   try {
-    return new URL(origin).host === req.headers.host;
+    const configured = (process.env.AI_ALLOWED_ORIGINS || '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const allowed = new Set([...DEFAULT_PUBLIC_ORIGINS, ...configured]);
+    return new URL(origin).host === host || allowed.has(origin);
   } catch {
     return false;
   }
+}
+
+function applyCors(req, res) {
+  const origin = req.headers.origin;
+  if (!origin || !isAllowedOrigin(origin, req.headers.host)) return;
+  res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-KDKMP-AI');
+  res.setHeader('Vary', 'Origin');
 }
 
 function withinRateLimit(req) {
@@ -103,15 +117,26 @@ function withinRateLimit(req) {
 export function createAiProxyMiddleware({ fetchImpl = fetch } = {}) {
   return async (req, res, next) => {
     if (req.url !== '/api/ai') return next();
+    const originAllowed = isAllowedOrigin(req.headers.origin, req.headers.host);
+    if (req.method === 'OPTIONS') {
+      if (!originAllowed) {
+        res.statusCode = 403;
+        return res.end();
+      }
+      applyCors(req, res);
+      res.statusCode = 204;
+      return res.end();
+    }
     if (req.method !== 'POST') {
       res.statusCode = 405;
       return res.end(JSON.stringify({ error: 'Method not allowed' }));
     }
 
-    if (!sameOriginRequest(req) || req.headers['x-kdkmp-ai'] !== '1') {
+    if (!originAllowed || req.headers['x-kdkmp-ai'] !== '1') {
       res.statusCode = 403;
       return res.end(JSON.stringify({ error: 'Akses AI ditolak' }));
     }
+    applyCors(req, res);
     if (!withinRateLimit(req)) {
       res.statusCode = 429;
       return res.end(JSON.stringify({ error: 'Terlalu banyak permintaan, coba sebentar lagi' }));
