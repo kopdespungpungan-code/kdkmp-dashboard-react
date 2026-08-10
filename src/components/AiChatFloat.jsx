@@ -81,7 +81,7 @@ export default function AiChatFloat({ soRows = [], salesRows = [] }) {
   const [messages, setMessages] = useState([
     {
       sender: 'bot',
-      text: 'Halo! Aku **AI KDKMP** 🤖\nAku bisa bantu rekap **Stok Opname (SO)** dan **Keuangan** toko.\n\nCoba ketik:\n• *"rekap"* — ringkasan SO + keuangan\n• *"keuangan"* — omset & pendapatan\n• *"barang expired"* — cek kadaluarsa\n• *"cari milo"* — cek stok produk'
+      text: 'Halo Mas Dedik 👋\nMau cek kondisi toko yang mana? Saya bisa bantu baca **stok opname**, **barang kedaluwarsa**, dan **tren penjualan** langsung dari data yang sedang tampil.\n\nContoh:\n• *"Penjualan terbaru gimana?"*\n• *"Bandingkan dengan kemarin"*\n• *"Stok Milo masih ada?"*\n• *"Apa yang perlu segera ditindaklanjuti?"*'
     }
   ]);
   const endRef = useRef(null);
@@ -93,14 +93,19 @@ export default function AiChatFloat({ soRows = [], salesRows = [] }) {
   const send = async (raw) => {
     const q = (raw ?? input).trim();
     if (!q || typing) return;
+    const history = messages;
     setMessages(prev => [...prev, { sender: 'user', text: q }]);
     setInput('');
     setTyping(true);
     try {
-      const reply = await askBestGrafityAI(q, soRows, salesRows);
+      const reply = await askBestGrafityAI(q, soRows, salesRows, history);
       setMessages(prev => [...prev, { sender: 'bot', text: reply }]);
     } catch (err) {
-      setMessages(prev => [...prev, { sender: 'bot', text: '⚠️ Terjadi kendala memproses permintaan. Coba lagi ya.' }]);
+      console.error('AI chat error:', err);
+      setMessages(prev => [...prev, {
+        sender: 'bot',
+        text: `Maaf Mas Dedik, model lokalnya belum tersambung (${err.message}). Coba kirim lagi setelah server AI aktif ya.`,
+      }]);
     } finally {
       setTyping(false);
     }

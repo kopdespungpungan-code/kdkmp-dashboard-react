@@ -1,119 +1,106 @@
-// AI Assistant KDKMP — model lokal bestgrafity (localhost:20128)
-// Full Dynamic, Natural, & Analytical
+// AI Assistant KDKMP — model lokal bestgrafity melalui proxy Vite same-origin.
+
+const rupiah = (value) => `Rp${Math.round(Number(value) || 0).toLocaleString('id-ID')}`;
+const rowQty = (row) => Number(row.qty ?? row.grocery ?? 0) + Number(row.gudang ?? 0);
 
 export function getSoSummary(soRows = []) {
   const totalItems = soRows.length;
-  let totalQtyFisik = 0;
-  const expiredSoonList = [];
+  const totalQtyFisik = soRows.reduce((sum, row) => sum + rowQty(row), 0);
   const now = Date.now();
   const thirtyDays = 30 * 86400000;
+  const expiredSoonList = soRows
+    .filter((row) => {
+      const time = new Date(row.expired).getTime();
+      return row.expired && Number.isFinite(time) && time >= now && time - now <= thirtyDays;
+    })
+    .map((row) => ({ produk: row.produk, expired: row.expired }));
 
-  soRows.forEach(r => {
-    totalQtyFisik += (Number(r.qty) || 0);
-    if (r.expired) {
-      const [y, m, d] = String(r.expired).split("-").map(Number);
-      if (y && m && d) {
-        const expTime = new Date(y, m - 1, d).getTime();
-        if (expTime - now <= thirtyDays) {
-          expiredSoonList.push({ produk: r.produk, expired: r.expired });
-        }
-      }
-    }
-  });
-
-  return { totalItems, totalQtyFisik, expiredSoonCount: expiredSoonList.length, expiredSoonList: expiredSoonList.slice(0, 8) };
+  return {
+    totalItems,
+    totalQtyFisik,
+    expiredSoonCount: expiredSoonList.length,
+    expiredSoonList: expiredSoonList.slice(0, 12),
+  };
 }
 
 export function getKeuanganSummary(salesRows = []) {
-  const totalOmset = salesRows.reduce((s, r) => s + (Number(r.omset) || 0), 0);
-  const days = new Set(salesRows.map(r => r.key || r.date)).size;
+  const totalOmset = salesRows.reduce((sum, row) => sum + (Number(row.omset) || 0), 0);
+  const days = new Set(salesRows.map((row) => row.key || row.date).filter(Boolean)).size;
   const avg = days ? totalOmset / days : 0;
-  const lastSales = salesRows.length > 0 ? salesRows[salesRows.length - 1] : { omset: 0 };
-  const lastOmset = Number(lastSales.omset) || 0;
-  const trend = avg > 0 ? ((lastOmset - avg) / avg * 100).toFixed(1) : 0;
-
-  return { totalOmset, days, avg, lastOmset, trend };
+  const latest = salesRows.at(-1) || {};
+  return {
+    totalOmset,
+    days,
+    avg,
+    lastOmset: Number(latest.omset) || 0,
+    lastDate: latest.key || '',
+    lastPetugas: latest.petugas || '—',
+  };
 }
 
 function buildContext(soRows = [], salesRows = []) {
   const so = getSoSummary(soRows);
   const keu = getKeuanganSummary(salesRows);
-  const hour = new Date().getHours();
-  const timeContext = hour < 10 ? "pagi" : hour < 15 ? "siang" : hour < 18 ? "sore" : "malam";
+  const stockData = soRows.map((row) => ({
+    produk: row.produk,
+    qty_fisik: rowQty(row),
+    expired: row.expired || null,
+    gondola: row.gondola || null,
+    petugas: row.petugas || null,
+  }));
+  const salesData = salesRows.slice(-31).map((row) => ({
+    tanggal: row.key,
+    omset: Number(row.omset) || 0,
+    gross: Number(row.gross) || 0,
+    petugas: row.petugas || null,
+  }));
 
-  return `--- KONTEKS TOKO KDKMP PUNGPUNGAN ---
-Waktu: ${timeContext}.
-SO: ${so.totalItems} item (${so.totalQtyFisik} pcs fisik). Expired dekat: ${so.expiredSoonCount} item.
-KEUANGAN: Total omset Rp${keu.totalOmset.toLocaleString('id-ID')} (${keu.days} hari). Rata-rata harian Rp${keu.avg.toLocaleString('id-ID')}.
+  return `Kamu adalah partner kerja KDKMP Pungpungan yang ngobrol alami dalam Bahasa Indonesia.
 
---- ATURAN MUTLAK JAWABAN ---
-1. JANGAN PERNAH gunakan template kaku seperti robot, AI, atau asisten formal.
-2. Jawablah dengan gaya bahasa percakapan sehari-hari yang sangat akrab, santai, hangat, dan asik ala partner jaga toko/boss (gunakan sapaan santai seperti "Bos", "Siapp", "Nih", dll).
-3. Jika ditanya sapaan ("halo", "hi", dll), langsung ajak ngobrol santai tanya kabar atau tawarkan data toko.
-4. Jangan kaku dan jangan gunakan kalimat standar yang berulang.`;
+SUMBER FAKTA TOKO (snapshot aplikasi saat ini):
+- Total produk SO: ${so.totalItems} item, jumlah fisik: ${so.totalQtyFisik} pcs.
+- Produk mendekati kedaluwarsa: ${so.expiredSoonCount}.
+- Total omset: ${rupiah(keu.totalOmset)} dari ${keu.days} hari; rata-rata ${rupiah(keu.avg)}/hari.
+- Penjualan terbaru (${keu.lastDate || 'belum ada tanggal'}): ${rupiah(keu.lastOmset)}, petugas ${keu.lastPetugas}.
+- DATA_STOK_JSON: ${JSON.stringify(stockData)}
+- DATA_PENJUALAN_JSON: ${JSON.stringify(salesData)}
+
+ATURAN:
+1. Jawab seperti manusia: natural, hangat, langsung ke inti, dan menyesuaikan nada pengguna. Jangan memakai template berulang.
+2. Dasarkan angka/nama produk pada snapshot di atas. Jangan mengarang data yang tidak tersedia.
+3. Jika data tidak cukup, katakan terus terang lalu tawarkan analisis yang bisa dilakukan dari data tersedia.
+4. Untuk pertanyaan produk, cari kecocokan nama secara longgar dari DATA_STOK_JSON.
+5. Bedakan fakta dari saran. Jika memberi saran, jelaskan singkat dasar datanya.
+6. Jangan selalu menyebut semua angka. Pakai hanya data yang relevan dengan pertanyaan.
+7. Panggil pengguna "Mas Dedik" sesekali bila natural, bukan di setiap jawaban.`;
 }
 
-export async function askBestGrafityAI(query, soRows = [], salesRows = []) {
-  const context = buildContext(soRows, salesRows);
-  try {
-    // Coba ke proxy lokal atau custom API endpoint jika dikonfigurasi, jika tidak langsung gunakan fallback pintar
-    const isLocal = window.location.hostname === "localhost" || 
-                    window.location.hostname === "127.0.0.1" || 
-                    window.location.hostname.startsWith("192.168.") || 
-                    window.location.hostname.startsWith("172.") || 
-                    window.location.hostname.startsWith("100.");
+export function buildAiMessages(query, soRows = [], salesRows = [], history = []) {
+  const recentHistory = history
+    .filter((message) => message?.text && ['user', 'bot'].includes(message.sender))
+    .slice(-8)
+    .map((message) => ({
+      role: message.sender === 'bot' ? 'assistant' : 'user',
+      content: message.text,
+    }));
 
-    const apiHost = window.location.hostname;
-    const endpoint = isLocal ? `http://${apiHost}:20128/v1/chat/completions` : null;
-
-    if (!endpoint) {
-      // Pada GitHub Pages (HTTPS), panggilan ke http://localhost diproteksi CORS/Mixed Content, 
-      // jadi kita langsung gunakan Engine Fallback cerdas berbasis data riil toko.
-      return fallbackNaturalAnswer(query, soRows, salesRows);
-    }
-
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "bestgrafity",
-        messages: [
-          { role: "system", content: context },
-          { role: "user", content: query }
-        ],
-        temperature: 0.7,
-        max_tokens: 500
-      })
-    });
-    if (!res.ok) throw new Error("API error");
-    const data = await res.json();
-    if (data.choices && data.choices[0] && data.choices[0].message) {
-      return data.choices[0].message.content.trim();
-    }
-    throw new Error("Invalid response");
-  } catch (err) {
-    console.error("AI fallback triggered:", err);
-    return fallbackNaturalAnswer(query, soRows, salesRows);
-  }
+  return [
+    { role: 'system', content: buildContext(soRows, salesRows) },
+    ...recentHistory,
+    { role: 'user', content: query },
+  ];
 }
 
-function fallbackNaturalAnswer(query, soRows = [], salesRows = []) {
-  const q = query.toLowerCase();
-  const so = getSoSummary(soRows);
-  const keu = getKeuanganSummary(salesRows);
+export async function askBestGrafityAI(query, soRows = [], salesRows = [], history = []) {
+  const response = await fetch('/api/ai', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-KDKMP-AI': '1' },
+    body: JSON.stringify({ messages: buildAiMessages(query, soRows, salesRows, history) }),
+  });
 
-  if (q.includes("halo") || q.includes("hi") || q.includes("pagi") || q.includes("siang") || q.includes("malam")) {
-    return `Halo juga, Boss! 👋🏪 Siap ditemenin mantengin toko KDKMP Pungpungan hari ini. Omset kita udah di angka **Rp${keu.totalOmset.toLocaleString('id-ID')}** nih. Mau dibantuin cek apa? Stok opname atau laporan keuangan? ✨`;
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.answer) {
+    throw new Error(data.error || 'Model lokal belum dapat dihubungi');
   }
-  if (q.includes("rekap") || q.includes("ringkasan")) {
-    return `📊 **Nih ringkasan santai toko kita:**\n• Total Omset: **Rp${keu.totalOmset.toLocaleString('id-ID')}** (${keu.days} hari)\n• Stok SO: **${so.totalItems} item** tercatat\n• Perhatian: ada **${so.expiredSoonCount} item** mau expired.\n\nAda yang mau dikulik lagi? ☕`;
-  }
-  if (q.includes("expired") || q.includes("kadaluarsa")) {
-    if (!so.expiredSoonCount) return "🎉 Aman bos! Belum ada barang yang mau expired dalam 30 hari ke depan. Toko steril!";
-    return `⚠️ Ada **${so.expiredSoonCount} item** yang mau expired nih:\n` + so.expiredSoonList.map(e => `• ${e.produk} (Exp: \`${e.expired}\`)`).join('\n') + `\n\nYuk segera diamankan promonya! 🏃‍♂️`;
-  }
-  if (q.includes("keuangan") || q.includes("omset")) {
-    return `💰 Omset total sejauh ini **Rp${keu.totalOmset.toLocaleString('id-ID')}** dengan rata-rata Rp${keu.avg.toLocaleString('id-ID')} per hari. Performanya mantap, pertahankan terus ya! 🚀`;
-  }
-  return `☕ Menarik tuh! Berdasarkan data toko kita, omset udah capai Rp${keu.totalOmset.toLocaleString('id-ID')} dan ${so.totalItems} item SO aktif. Mau tanya seputar apa lagi nih, boss?`;
+  return data.answer;
 }
