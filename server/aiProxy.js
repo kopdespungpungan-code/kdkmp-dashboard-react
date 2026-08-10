@@ -101,6 +101,7 @@ function applyCors(req, res) {
   res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-KDKMP-AI');
+  res.setHeader('Access-Control-Allow-Private-Network', 'true');
   res.setHeader('Vary', 'Origin');
 }
 
