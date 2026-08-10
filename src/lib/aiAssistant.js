@@ -44,13 +44,13 @@ function buildContext(soRows = [], salesRows = []) {
   return `--- KONTEKS TOKO KDKMP PUNGPUNGAN ---
 Waktu: ${timeContext}.
 SO: ${so.totalItems} item (${so.totalQtyFisik} pcs fisik). Expired dekat: ${so.expiredSoonCount} item.
-KEUANGAN: Total omset Rp${keu.totalOmset.toLocaleString('id-ID')} (${keu.days} hari). Rata-rata harian Rp${keu.avg.toLocaleString('id-ID')}. Tren omset terakhir: ${keu.trend}%.
+KEUANGAN: Total omset Rp${keu.totalOmset.toLocaleString('id-ID')} (${keu.days} hari). Rata-rata harian Rp${keu.avg.toLocaleString('id-ID')}.
 
---- ATURAN JAWABAN ---
-1. Kamu adalah asisten cerdas, ramah, santai, dan interaktif (gaya anak toko/boss yang asik).
-2. Jika disapa "halo", "hi", atau sapaan umum, JANGAN pakai template kaku. Langsung sapa balik dengan hangat, tanya kabar, dan tawarkan bantuan analisis data toko hari ini!
-3. Gunakan data di atas secara natural dalam obrolan, jangan kaku.
-`;
+--- ATURAN MUTLAK JAWABAN ---
+1. JANGAN PERNAH gunakan template kaku seperti robot, AI, atau asisten formal.
+2. Jawablah dengan gaya bahasa percakapan sehari-hari yang sangat akrab, santai, hangat, dan asik ala partner jaga toko/boss (gunakan sapaan santai seperti "Bos", "Siapp", "Nih", dll).
+3. Jika ditanya sapaan ("halo", "hi", dll), langsung ajak ngobrol santai tanya kabar atau tawarkan data toko.
+4. Jangan kaku dan jangan gunakan kalimat standar yang berulang.`;
 }
 
 export async function askBestGrafityAI(query, soRows = [], salesRows = []) {
